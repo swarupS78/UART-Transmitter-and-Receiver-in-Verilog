@@ -1,0 +1,79 @@
+`timescale 1ns / 1ps
+
+module TB_UART_top;
+
+    reg clk;
+    reg rst;
+    reg load;
+    reg [7:0] tx_data;
+    
+    wire tx_to_rx;      
+    wire [7:0] rx_data;
+
+    localparam CLK_PERIOD = 20; 
+    localparam CLKS_PER_BIT = 217;
+    localparam BIT_PERIOD = CLKS_PER_BIT * CLK_PERIOD; 
+
+    UART_top #(
+        .CLKS_PER_BIT(CLKS_PER_BIT)
+    ) uut (
+        .clk(clk),
+        .rst(rst),
+        .load(load),
+        .tx_data(tx_data),
+        .tx(tx_to_rx),   // Driving the wire
+        .rx(tx_to_rx),   // Reading the wire
+        .rx_data(rx_data)
+    );
+
+    always begin
+        #(CLK_PERIOD/2) clk = ~clk;
+    end
+
+    initial begin
+        clk     = 0;
+        rst     = 1;
+        load    = 0;
+        tx_data = 8'h00;
+
+        #40;
+        rst = 0;
+        #40;
+        rst = 1;
+        #40;
+
+        // Transmit first byte: 8'h3C
+        @(posedge clk);
+        tx_data <= 8'h3C;
+        load    <= 1;
+        
+        @(posedge clk);
+        load    <= 0;
+
+        // Wait for the transmission loopback to completely finish
+        #(11 * BIT_PERIOD);
+        
+        if (rx_data == 8'h3C)
+            $display("SUCCESS: Received data matches transmitted data (8'h3C)");
+        else
+            $display("ERROR: Data mismatch! Sent 8'h3C, Received %h", rx_data);
+
+        // Transmit second byte: 8'hA5
+        @(posedge clk);
+        tx_data <= 8'hA5;
+        load    <= 1;
+        
+        @(posedge clk);
+        load    <= 0;
+
+        #(11 * BIT_PERIOD);
+
+        if (rx_data == 8'hA5)
+            $display("SUCCESS: Received data matches transmitted data (8'hA5)");
+        else
+            $display("ERROR: Data mismatch! Sent 8'hA5, Received %h", rx_data);
+
+        $finish;
+    end
+
+endmodule
